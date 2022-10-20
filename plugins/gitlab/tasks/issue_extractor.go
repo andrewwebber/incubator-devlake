@@ -19,9 +19,12 @@ package tasks
 
 import (
 	"encoding/json"
+	"fmt"
+	"regexp"
+	"strings"
+
 	"github.com/apache/incubator-devlake/errors"
 	"github.com/apache/incubator-devlake/models/domainlayer/ticket"
-	"regexp"
 
 	"github.com/apache/incubator-devlake/plugins/core"
 
@@ -130,6 +133,7 @@ type IssuesResponse struct {
 func ExtractApiIssues(taskCtx core.SubTaskContext) errors.Error {
 	rawDataSubTaskArgs, data := CreateRawDataSubTaskArgs(taskCtx, RAW_ISSUE_TABLE)
 	config := data.Options.TransformationRules
+	fmt.Println("Gitlab Config: %+v", config)
 	var issueSeverityRegex *regexp.Regexp
 	var issueComponentRegex *regexp.Regexp
 	var issuePriorityRegex *regexp.Regexp
@@ -159,6 +163,11 @@ func ExtractApiIssues(taskCtx core.SubTaskContext) errors.Error {
 		}
 	}
 	var issueTypeBug = config.IssueTypeBug
+
+	if len(issueTypeBug) == 0 {
+		issueTypeBug = "(?i)flow::defect"
+	}
+
 	if len(issueTypeBug) > 0 {
 		issueTypeBugRegex, err = regexp.Compile(issueTypeBug)
 		if err != nil {
@@ -166,6 +175,10 @@ func ExtractApiIssues(taskCtx core.SubTaskContext) errors.Error {
 		}
 	}
 	var issueTypeRequirement = config.IssueTypeRequirement
+	if len(issueTypeRequirement) == 0 {
+		issueTypeRequirement = "(?i)flow::feature"
+	}
+
 	if len(issueTypeRequirement) > 0 {
 		issueTypeRequirementRegex, err = regexp.Compile(issueTypeRequirement)
 		if err != nil {
@@ -243,6 +256,17 @@ func ExtractApiIssues(taskCtx core.SubTaskContext) errors.Error {
 					}
 				}
 			}
+
+			if strings.Contains(strings.ToLower(body.Title), "bug:") {
+				fmt.Println("found bug - %s", body.Title)
+				gitlabIssue.Type = ticket.BUG
+			}
+
+			if strings.Contains(strings.ToLower(body.IssueType), "incident") {
+				fmt.Println("found issue incident - %s", body.IssueType)
+				gitlabIssue.Type = ticket.INCIDENT
+			}
+
 			gitlabIssue.ConnectionId = data.Options.ConnectionId
 			if body.Author != nil {
 				gitlabAuthor, err := convertGitlabAuthor(body, data.Options.ConnectionId)
@@ -278,6 +302,7 @@ func ExtractApiIssues(taskCtx core.SubTaskContext) errors.Error {
 
 func convertGitlabIssue(issue *IssuesResponse, projectId int) (*models.GitlabIssue, errors.Error) {
 	gitlabIssue := &models.GitlabIssue{
+		Type:            issue.Type,
 		GitlabId:        issue.Id,
 		ProjectId:       projectId,
 		Number:          issue.Iid,

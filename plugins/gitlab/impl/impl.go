@@ -45,6 +45,7 @@ type Gitlab string
 
 func (plugin Gitlab) Init(config *viper.Viper, logger core.Logger, db *gorm.DB) errors.Error {
 	api.Init(config, logger, db)
+	fmt.Println("Gitlab plugin loaded ***")
 	return nil
 }
 
